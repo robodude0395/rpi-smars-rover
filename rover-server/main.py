@@ -11,7 +11,7 @@ audio, and motor commands across multiple cores without GIL contention.
 """
 
 from gevent import monkey
-monkey.patch_all()
+monkey.patch_all(thread=False)  # Don't patch threading — video capture uses real threads
 
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO

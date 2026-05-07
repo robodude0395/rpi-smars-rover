@@ -58,7 +58,6 @@ class VideoStream:
         # Background capture thread state
         self._capture_thread: Optional[threading.Thread] = None
         self._latest_frame: Optional[bytes] = None
-        self._frame_event = threading.Event()
 
     def start(self):
         """Open the video device and start the background capture thread."""
@@ -152,9 +151,8 @@ class VideoStream:
             if not ret:
                 continue
 
-            # Store latest frame and signal the generator
+            # Store latest frame
             self._latest_frame = jpeg.tobytes()
-            self._frame_event.set()
 
             # Frame pacing
             elapsed = time.time() - frame_start
@@ -181,13 +179,6 @@ class VideoStream:
 
         try:
             while self._active:
-                # Wait for a new frame (with timeout so we can check _active)
-                self._frame_event.wait(timeout=0.1)
-                self._frame_event.clear()
-
-                if not self._active:
-                    break
-
                 jpeg_bytes = self._latest_frame
                 if jpeg_bytes is None:
                     gevent_sleep(0.01)
