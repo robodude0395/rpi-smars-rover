@@ -1,0 +1,32 @@
+{
+  "build": {
+    "devPath": "../src",
+    "distDir": "../src"
+  },
+  "package": {
+    "productName": "SMARS Rover",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": true
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.smars.rover",
+      "icon": []
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "title": "SMARS Rover",
+        "width": 900,
+        "height": 700,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  }
+}

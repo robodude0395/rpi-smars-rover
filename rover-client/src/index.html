@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMARS Rover</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header Bar -->
+    <header class="header-bar">
+        <div class="header-left">
+            <h1 class="app-title">SMARS Rover</h1>
+        </div>
+        <div class="header-right">
+            <span class="connection-status">
+                <span class="status-dot" id="status-dot"></span>
+                <span id="connection-label">Disconnected</span>
+            </span>
+            <button class="btn-settings" id="btn-settings" title="Settings">&#9881;</button>
+        </div>
+    </header>
+
+    <!-- Video Panel -->
+    <section class="video-panel" id="video-panel">
+        <img id="video-feed" class="video-feed" alt="Rover Video Feed">
+        <div class="video-placeholder" id="video-placeholder">
+            <span>No Video Feed</span>
+            <p>Connect to rover to start streaming</p>
+        </div>
+    </section>
+
+    <!-- Control Bar -->
+    <section class="control-bar">
+        <!-- Motor Controls -->
+        <div class="control-group motor-controls">
+            <label class="control-label">Speed</label>
+            <input type="range" id="speed-slider" min="0" max="100" value="75" class="speed-slider">
+            <span class="speed-value" id="speed-value">75%</span>
+            <div class="wasd-indicator">
+                <div class="key-row">
+                    <span class="key" id="key-w">W</span>
+                </div>
+                <div class="key-row">
+                    <span class="key" id="key-a">A</span>
+                    <span class="key" id="key-s">S</span>
+                    <span class="key" id="key-d">D</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Controls -->
+        <div class="control-group audio-controls">
+            <button class="btn-toggle" id="btn-mic" title="Toggle Microphone">
+                <span class="toggle-icon">&#127908;</span>
+                <span class="toggle-label">Mic</span>
+            </button>
+            <button class="btn-toggle" id="btn-speaker" title="Toggle Speaker">
+                <span class="toggle-icon">&#128264;</span>
+                <span class="toggle-label">Speaker</span>
+            </button>
+        </div>
+
+        <!-- Connection Panel -->
+        <div class="control-group connection-panel">
+            <input type="text" id="rover-ip" class="ip-input" placeholder="192.168.1.100" value="">
+            <button class="btn-connect" id="btn-connect">Connect</button>
+            <div class="latency-display">
+                <span class="latency-label">Latency:</span>
+                <span class="latency-value" id="latency-value">--</span>
+                <span class="latency-unit">ms</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Settings Panel Overlay -->
+    <div class="settings-overlay" id="settings-overlay">
+        <div class="settings-panel">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button class="btn-close" id="btn-settings-close">&times;</button>
+            </div>
+            <div class="settings-body">
+                <div class="setting-group">
+                    <label for="setting-resolution">Video Resolution</label>
+                    <select id="setting-resolution">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="setting-fps">Frame Rate</label>
+                    <select id="setting-fps">
+                        <option value="5">5 fps</option>
+                        <option value="10" selected>10 fps</option>
+                        <option value="15">15 fps</option>
+                        <option value="20">20 fps</option>
+                        <option value="30">30 fps</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="setting-audio-device">Audio Input Device</label>
+                    <select id="setting-audio-device">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+            </div>
+            <div class="settings-footer">
+                <button class="btn-save" id="btn-settings-save">Save &amp; Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/motor.js"></script>
+    <script src="js/video.js"></script>
+    <script src="js/audio_out.js"></script>
+    <script src="js/audio_in.js"></script>
+    <script src="js/settings.js"></script>
+</body>
+</html>
