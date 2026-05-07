@@ -241,29 +241,17 @@ const SettingsPanel = {
             VideoDisplay.stop();
         }
 
-        // Stop streams, then start with new config (stream/start accepts config overrides)
-        fetch(`${baseUrl}/api/stream/stop`, { method: 'POST' })
+        // Start streams with new config (server handles stop internally)
+        fetch(`${baseUrl}/api/stream/start`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(streamConfig)
+        })
             .then((response) => {
                 if (!response.ok) {
-                    throw new Error(`Stream stop failed: HTTP ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(() => {
-                // Small delay to let the server release the camera
-                return new Promise(resolve => setTimeout(resolve, 500));
-            })
-            .then(() => {
-                // Start streams with new config
-                return fetch(`${baseUrl}/api/stream/start`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(streamConfig)
-                });
-            })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Stream start failed: HTTP ${response.status}`);
+                    return response.json().then(data => {
+                        throw new Error(data.message || `Stream start failed: HTTP ${response.status}`);
+                    });
                 }
                 return response.json();
             })

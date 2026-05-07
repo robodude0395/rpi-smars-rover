@@ -121,12 +121,20 @@ def stream_start():
     if _audio_capture.is_active:
         _audio_capture.stop()
 
+    # Wait for the camera device to be fully released by the kernel
+    time.sleep(1.0)
+
     # Start video stream with current config
     _video_stream.device = _config.video_device
     _video_stream.resolution = _config.video_resolution
     _video_stream.fps = _config.video_fps
     _video_stream.jpeg_quality = _config.video_jpeg_quality
     _video_stream.start()
+
+    # Retry once if camera didn't open (device may still be releasing)
+    if not _video_stream.is_active:
+        time.sleep(1.0)
+        _video_stream.start()
 
     if not _video_stream.is_active:
         return jsonify({
