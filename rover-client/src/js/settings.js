@@ -61,6 +61,7 @@ const SettingsPanel = {
     /**
      * Fetch available devices from GET /api/devices on the connected rover.
      * Populates resolution and audio device selectors on success.
+     * Falls back to sensible defaults if device detection fails.
      */
     _fetchDevices() {
         if (!RoverApp.roverIp) {
@@ -88,8 +89,9 @@ const SettingsPanel = {
             })
             .catch((err) => {
                 console.error('Settings: Failed to fetch devices:', err);
-                this._setSelectPlaceholder(this._resolutionSelect, 'Failed to load');
-                this._setSelectPlaceholder(this._audioDeviceSelect, 'Failed to load');
+                // Fall back to defaults instead of showing error
+                this._populateResolutions({ video: [] });
+                this._populateAudioDevices({ audio: [] });
             });
     },
 
@@ -101,18 +103,22 @@ const SettingsPanel = {
         this._resolutionSelect.innerHTML = '';
 
         const resolutions = new Set();
+        const framerates = new Set();
 
         if (devices.video && devices.video.length > 0) {
             devices.video.forEach((device) => {
                 if (device.resolutions) {
                     device.resolutions.forEach((res) => resolutions.add(res));
                 }
+                if (device.framerates) {
+                    device.framerates.forEach((fps) => framerates.add(fps));
+                }
             });
         }
 
         if (resolutions.size === 0) {
-            // Provide sensible defaults if no device reports resolutions
-            ['320x240', '640x480', '800x600', '1280x720'].forEach((res) => resolutions.add(res));
+            // Provide sensible defaults including low resolutions for Pi Zero
+            ['160x120', '320x240', '640x480', '800x600', '1280x720'].forEach((res) => resolutions.add(res));
         }
 
         // Sort resolutions by width (ascending)
@@ -133,6 +139,41 @@ const SettingsPanel = {
         if (resolutions.has('320x240')) {
             this._resolutionSelect.value = '320x240';
         }
+
+        // Populate FPS selector from detected framerates
+        this._populateFramerates(framerates);
+    },
+
+    /**
+     * Populate the FPS selector from detected device framerates.
+     * @param {Set<number>} framerates - Set of detected FPS values
+     */
+    _populateFramerates(framerates) {
+        if (!this._fpsSelect) return;
+
+        this._fpsSelect.innerHTML = '';
+
+        if (framerates.size === 0) {
+            // Provide sensible defaults for Pi Zero
+            [5, 10, 15, 20, 25, 30].forEach((fps) => framerates.add(fps));
+        }
+
+        const sorted = Array.from(framerates).sort((a, b) => a - b);
+
+        sorted.forEach((fps) => {
+            const option = document.createElement('option');
+            option.value = fps;
+            option.textContent = fps + ' fps';
+            // Mark high FPS values with a warning for Pi Zero
+            if (fps > 20) {
+                option.textContent += ' (may be unstable)';
+            }
+            this._fpsSelect.appendChild(option);
+        });
+
+        // Default to 15fps
+        const defaultFps = sorted.includes(15) ? '15' : sorted[0].toString();
+        this._fpsSelect.value = defaultFps;
     },
 
     /**

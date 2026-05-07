@@ -250,7 +250,8 @@ const RoverApp = {
     },
 
     /**
-     * Measure latency by sending a ping on the control channel and timing the ack.
+     * Measure latency using Socket.IO's built-in ping/pong mechanism.
+     * Uses a dedicated 'ping' event that the server echoes back as 'pong'.
      */
     measureLatency() {
         if (!this.sockets.control || !this.connected) {
@@ -258,42 +259,33 @@ const RoverApp = {
         }
 
         const start = performance.now();
-        const seq = Date.now();
 
-        // Send a ping-style motor command with seq for round-trip measurement
-        this.sockets.control.emit('motor_command', {
-            type: 'ping',
-            seq: seq
-        });
-
-        // Listen for the ack with matching seq
-        const onAck = (data) => {
-            if (data && data.seq === seq) {
-                const latency = Math.round(performance.now() - start);
-                this._updateLatencyDisplay(latency);
-                this.sockets.control.off('ack', onAck);
-            }
-        };
-
-        this.sockets.control.on('ack', onAck);
-
-        // Timeout: remove listener after 5 seconds if no response
-        setTimeout(() => {
-            if (this.sockets.control) {
-                this.sockets.control.off('ack', onAck);
-            }
-        }, 5000);
+        this.sockets.control.volatile.emit('ping_latency', { t: start });
     },
 
     /**
-     * Start periodic latency measurement (every 2 seconds).
+     * Start periodic latency measurement (every 3 seconds).
      */
     _startLatencyMeasurement() {
         this._stopLatencyMeasurement();
-        this.measureLatency();
-        this.latencyInterval = setInterval(() => {
+
+        // Listen for pong responses
+        if (this.sockets.control) {
+            this.sockets.control.on('pong_latency', (data) => {
+                if (data && data.t) {
+                    const latency = Math.round(performance.now() - data.t);
+                    this._updateLatencyDisplay(latency);
+                }
+            });
+        }
+
+        // Start measuring after a short delay to let connection stabilize
+        setTimeout(() => {
             this.measureLatency();
-        }, 2000);
+            this.latencyInterval = setInterval(() => {
+                this.measureLatency();
+            }, 3000);
+        }, 1000);
     },
 
     /**

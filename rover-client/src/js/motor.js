@@ -16,8 +16,8 @@ const MotorControl = {
     // Base speed value (max motor value)
     BASE_SPEED: 127,
 
-    // Command send rate: 20Hz = 50ms interval
-    SEND_RATE_MS: 50,
+    // Command send rate: 100Hz = 10ms interval for responsive control
+    SEND_RATE_MS: 10,
 
     /**
      * Initialize motor control — bind keyboard events and speed slider.
@@ -179,12 +179,12 @@ const MotorControl = {
     },
 
     /**
-     * Start the 20Hz command sending interval.
+     * Start the command sending interval at high frequency.
      */
     _startSending() {
         if (this.sendInterval !== null) return;
 
-        // Send immediately, then at 20Hz
+        // Send immediately on key press for instant response
         this._sendCommand();
         this.sendInterval = setInterval(() => {
             this._sendCommand();
@@ -192,7 +192,7 @@ const MotorControl = {
     },
 
     /**
-     * Stop the 20Hz command sending interval.
+     * Stop the command sending interval.
      */
     _stopSending() {
         if (this.sendInterval !== null) {

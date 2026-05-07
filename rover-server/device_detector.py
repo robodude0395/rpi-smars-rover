@@ -162,17 +162,27 @@ class DeviceDetector:
             if fmt.isupper() and len(fmt) >= 3 and fmt not in formats:
                 formats.append(fmt)
 
-        # Parse resolutions (e.g., 'Size: Discrete 640x480')
-        for match in re.finditer(r'Size:\s*Discrete\s+(\d+x\d+)', output):
-            res = match.group(1)
+        # Parse resolutions — handle multiple v4l2-ctl output styles:
+        #   "Size: Discrete 640x480"
+        #   "Size: Stepwise 160x120 - 1920x1080"
+        #   Just "640x480" on its own line
+        for match in re.finditer(r'(\d{3,4})x(\d{3,4})', output):
+            res = match.group(0)
             if res not in resolutions:
                 resolutions.append(res)
 
-        # Parse frame rates (e.g., 'Interval: Discrete 0.033s (30.000 fps)')
-        for match in re.finditer(r'\((\d+(?:\.\d+)?)\s*fps\)', output):
+        # Parse frame rates — handle multiple output styles:
+        #   "Interval: Discrete 0.033s (30.000 fps)"
+        #   "(30 fps)"
+        #   "30.000 fps"
+        for match in re.finditer(r'(\d+(?:\.\d+)?)\s*fps', output):
             fps = int(float(match.group(1)))
-            if fps not in framerates:
+            if fps > 0 and fps not in framerates:
                 framerates.append(fps)
+
+        # If no framerates found from output, provide common defaults
+        if not framerates:
+            framerates = [5, 10, 15, 20, 25, 30]
 
         framerates.sort()
         return formats, resolutions, framerates

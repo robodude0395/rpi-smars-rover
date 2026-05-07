@@ -34,6 +34,10 @@ class ControlNamespace(Namespace):
         """Handle client connection to /control namespace."""
         logger.info("Client connected to /control namespace")
 
+    def on_ping_latency(self, data):
+        """Handle latency ping — echo back immediately for round-trip measurement."""
+        emit('pong_latency', data)
+
     def on_disconnect(self):
         """Handle client disconnect — send stop command to prevent runaway motors."""
         logger.info("Client disconnected from /control namespace, sending stop command")
@@ -51,44 +55,27 @@ class ControlNamespace(Namespace):
         Args:
             data: The message payload (should be a dict).
         """
-        # Validate that data is a dict
+        # Fast path: minimal validation for motor commands
         if not isinstance(data, dict):
-            emit('error', {'message': 'Invalid message format: expected a JSON object'})
+            emit('error', {'message': 'Invalid message format'})
             return
 
-        # Validate required fields exist
-        required_fields = ['type', 'left', 'right', 'seq']
-        missing_fields = [f for f in required_fields if f not in data]
-        if missing_fields:
-            emit('error', {
-                'message': f'Missing required fields: {", ".join(missing_fields)}'
-            })
+        cmd_type = data.get('type')
+        seq = data.get('seq', 0)
+
+        if cmd_type != 'motor':
+            emit('error', {'message': f'Unknown command type: {cmd_type}'})
             return
 
-        # Validate field types
-        if data['type'] != 'motor':
-            emit('error', {'message': f'Unknown command type: {data["type"]}'})
+        left = data.get('left')
+        right = data.get('right')
+
+        if left is None or right is None:
+            emit('error', {'message': 'Missing left/right fields'})
             return
 
-        if not isinstance(data['left'], (int, float)):
-            emit('error', {'message': 'Field "left" must be a number'})
-            return
+        # Send to motor controller
+        self.rover_controller.send_command(int(left), int(right))
 
-        if not isinstance(data['right'], (int, float)):
-            emit('error', {'message': 'Field "right" must be a number'})
-            return
-
-        if not isinstance(data['seq'], (int, float)):
-            emit('error', {'message': 'Field "seq" must be a number'})
-            return
-
-        # Convert to int (handles float values sent from JS)
-        left = int(data['left'])
-        right = int(data['right'])
-        seq = int(data['seq'])
-
-        # Send command to motor controller
-        self.rover_controller.send_command(left, right)
-
-        # Emit acknowledgment with matching sequence number
-        emit('ack', {'type': 'ack', 'seq': seq})
+        # Emit lightweight acknowledgment
+        emit('ack', {'seq': int(seq)})

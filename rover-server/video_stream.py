@@ -86,8 +86,8 @@ class VideoStream:
         Each yielded chunk is formatted as:
             b'--frame\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n' + jpeg_bytes + b'\\r\\n'
 
-        Maintains frame pacing based on the configured FPS using inter-frame delays.
-        If a frame capture fails, that frame is skipped and the generator continues.
+        Maintains frame pacing based on the configured FPS. Uses adaptive timing
+        that accounts for actual capture and encoding duration.
 
         Yields:
             bytes: Multipart-formatted JPEG frame data.
@@ -96,15 +96,21 @@ class VideoStream:
             return
 
         frame_interval = 1.0 / self.fps
+        next_frame_time = time.time()
 
         while self._active:
-            frame_start = time.time()
+            now = time.time()
+
+            # If we're behind schedule, skip the sleep and catch up
+            if now < next_frame_time:
+                time.sleep(next_frame_time - now)
+
+            next_frame_time = time.time() + frame_interval
 
             ret, frame = self._capture.read()
             if not ret:
                 # Frame capture failed — skip and continue
                 logger.debug("Frame capture failed, skipping frame.")
-                time.sleep(frame_interval)
                 continue
 
             # Resize to configured resolution
@@ -115,16 +121,9 @@ class VideoStream:
             ret, jpeg = cv2.imencode('.jpg', frame, encode_params)
             if not ret:
                 logger.debug("JPEG encoding failed, skipping frame.")
-                time.sleep(frame_interval)
                 continue
 
             jpeg_bytes = jpeg.tobytes()
-
-            # Frame pacing: sleep for remaining time to maintain target FPS
-            elapsed = time.time() - frame_start
-            sleep_time = frame_interval - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
 
             # Yield as multipart frame
             yield (

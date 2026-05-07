@@ -95,7 +95,13 @@ def stream_start():
         if 'resolution' in video_cfg:
             _config.video_resolution = tuple(video_cfg['resolution'])
         if 'fps' in video_cfg:
-            _config.video_fps = video_cfg['fps']
+            # Validate FPS: Pi Zero can realistically sustain 5-20fps at 320x240
+            fps = int(video_cfg['fps'])
+            if fps < 1:
+                fps = 1
+            elif fps > 30:
+                fps = 30
+            _config.video_fps = fps
         if 'jpeg_quality' in video_cfg:
             _config.video_jpeg_quality = video_cfg['jpeg_quality']
 
@@ -252,7 +258,12 @@ def update_config():
         if 'resolution' in video_cfg:
             _config.video_resolution = tuple(video_cfg['resolution'])
         if 'fps' in video_cfg:
-            _config.video_fps = video_cfg['fps']
+            fps = int(video_cfg['fps'])
+            if fps < 1:
+                fps = 1
+            elif fps > 30:
+                fps = 30
+            _config.video_fps = fps
         if 'jpeg_quality' in video_cfg:
             _config.video_jpeg_quality = video_cfg['jpeg_quality']
 
