@@ -147,6 +147,7 @@ const MotorControl = {
 
     /**
      * Send a motor command on the control socket.
+     * Uses volatile emit so commands are dropped rather than queued if busy.
      */
     _sendCommand() {
         if (!RoverApp.sockets.control || !RoverApp.connected) return;
@@ -154,7 +155,7 @@ const MotorControl = {
         const { left, right } = this._getMotorValues();
         this.seq++;
 
-        RoverApp.sockets.control.emit('command', {
+        RoverApp.sockets.control.volatile.emit('command', {
             type: 'motor',
             left: left,
             right: right,
@@ -164,18 +165,23 @@ const MotorControl = {
 
     /**
      * Send a stop command (left=0, right=0).
+     * Sends multiple times to ensure delivery through any buffering.
      */
     _sendStop() {
         if (!RoverApp.sockets.control || !RoverApp.connected) return;
 
         this.seq++;
 
-        RoverApp.sockets.control.emit('command', {
-            type: 'motor',
-            left: 0,
-            right: 0,
-            seq: this.seq
-        });
+        // Send stop command 3 times rapidly to ensure it arrives
+        for (let i = 0; i < 3; i++) {
+            RoverApp.sockets.control.volatile.emit('command', {
+                type: 'motor',
+                left: 0,
+                right: 0,
+                seq: this.seq + i
+            });
+        }
+        this.seq += 2;
     },
 
     /**

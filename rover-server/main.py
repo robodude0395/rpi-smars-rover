@@ -5,7 +5,13 @@ Integrates all components into a single Flask-SocketIO application:
 - /audio_out namespace for rover mic → client streaming
 - /audio_in namespace for client mic → rover speaker
 - /video_feed HTTP endpoint for MJPEG video streaming
+
+Uses gevent for async I/O, allowing concurrent handling of video streaming,
+audio, and motor commands across multiple cores without GIL contention.
 """
+
+from gevent import monkey
+monkey.patch_all()
 
 from flask import Flask, Response, jsonify
 from flask_socketio import SocketIO
@@ -24,8 +30,9 @@ from video_stream import VideoStream
 config = ServerConfig()
 
 # Create Flask app and SocketIO instance
+# gevent async mode: true cooperative concurrency, no GIL blocking
 app = Flask(__name__)
-socketio = SocketIO(app, async_mode='threading', cors_allowed_origins='*')
+socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins='*')
 
 
 @app.after_request

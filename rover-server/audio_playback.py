@@ -17,6 +17,11 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 try:
+    from gevent import sleep as gevent_sleep
+except ImportError:
+    gevent_sleep = time.sleep
+
+try:
     import alsaaudio
     _ALSA_AVAILABLE = True
 except ImportError:
@@ -39,14 +44,14 @@ class AudioPlayback:
     CHANNELS = 1
 
     def __init__(self, device: str = 'default', sample_rate: int = 16000,
-                 period_size: int = 128, max_periods: int = 2):
+                 period_size: int = 512, max_periods: int = 8):
         """Initialize ALSA playback with circular buffer.
 
         Args:
             device: ALSA device name (default 'default').
             sample_rate: Sample rate in Hz (default 16000).
-            period_size: ALSA period size in samples (default 128).
-            max_periods: Maximum number of periods in buffer (default 2).
+            period_size: ALSA period size in samples (default 512).
+            max_periods: Maximum number of periods in buffer (default 8).
         """
         self._device = device
         self._sample_rate = sample_rate
@@ -156,7 +161,7 @@ class AudioPlayback:
 
             if chunk is None:
                 # Buffer empty — sleep briefly to avoid busy-waiting
-                time.sleep(0.004)  # ~4ms, half a period at 16kHz/128
+                gevent_sleep(0.004)  # ~4ms, half a period at 16kHz/512
                 continue
 
             try:
