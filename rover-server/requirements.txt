@@ -5,5 +5,7 @@ gevent==24.11.1
 gevent-websocket==0.10.1
 pyalsaaudio==0.11.0
 spidev==3.6
-opencv-python==4.11.0.86
 pyaudio==0.2.14
+# opencv-python is installed via system package (sudo apt-get install python3-opencv)
+# Building from source on Pi Zero requires too much disk space and time.
+# Use: python3 -m venv .venv --system-site-packages
