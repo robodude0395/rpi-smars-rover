@@ -74,8 +74,8 @@ class RoverController:
     def send_command(self, left: int, right: int) -> bool:
         """Send motor command over SPI.
 
-        Clamps left/right to -127..127, encodes using offset encoding,
-        and transmits a 3-byte packet. Retries once on SPI error.
+        Sends a 4-byte packet with a sync byte prefix: [0xAA, command_id, left, right]
+        The sync byte (0xAA = 170) allows the Arduino to find packet boundaries.
 
         Args:
             left: Left motor speed (-127 to 127).
@@ -89,12 +89,22 @@ class RoverController:
 
         left_byte = self.encode_speed(left)
         right_byte = self.encode_speed(right)
-        packet = [self._command_id, left_byte, right_byte]
 
-        # Debug: print actual bytes being sent over SPI
-        print(f"SPI TX: id={self._command_id} L_byte={left_byte} R_byte={right_byte} (L={left} R={right})")
+        # 4-byte packet: [SYNC, command_id, left_speed, right_speed]
+        packet = [0xAA, self._command_id, left_byte, right_byte]
 
         success = self._transmit(packet)
+
+        if not success:
+            logger.warning("SPI write failed, retrying command_id=%d", self._command_id)
+            success = self._transmit(packet)
+            if not success:
+                logger.error("SPI write failed after retry, discarding command_id=%d", self._command_id)
+
+        # Always increment command_id regardless of success
+        self._command_id = (self._command_id + 1) % 256
+
+        return success
 
         if not success:
             # Single retry before discard

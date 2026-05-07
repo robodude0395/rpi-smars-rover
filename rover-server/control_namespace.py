@@ -77,10 +77,6 @@ class ControlNamespace(Namespace):
         left_int = int(left)
         right_int = int(right)
 
-        # Log motor commands for debugging
-        if left_int != 0 or right_int != 0:
-            print(f"Motor: L={left_int} R={right_int}")
-
         # Send to motor controller
         self.rover_controller.send_command(left_int, right_int)
 
