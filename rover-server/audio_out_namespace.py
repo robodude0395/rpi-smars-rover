@@ -41,7 +41,11 @@ class AudioOutNamespace(Namespace):
         Args:
             data: Raw PCM audio bytes (512 bytes).
         """
-        self._socketio.emit('audio_data', data, namespace=self.namespace)
+        if self._connected_clients > 0:
+            try:
+                self._socketio.emit('audio_data', data, namespace=self.namespace)
+            except Exception as e:
+                logger.warning("Failed to emit audio data: %s", e)
 
     def on_connect(self):
         """Handle client connection to /audio_out namespace.
@@ -53,7 +57,10 @@ class AudioOutNamespace(Namespace):
 
         if self._connected_clients == 1 and not self.audio_capture.is_active:
             self.audio_capture._on_audio = self._on_audio_data
-            self.audio_capture.start()
+            try:
+                self.audio_capture.start()
+            except Exception as e:
+                logger.error("Failed to start audio capture: %s", e)
 
     def on_disconnect(self):
         """Handle client disconnect from /audio_out namespace.
@@ -63,5 +70,9 @@ class AudioOutNamespace(Namespace):
         self._connected_clients = max(0, self._connected_clients - 1)
         logger.info("Client disconnected from /audio_out (total: %d)", self._connected_clients)
 
-        if self._connected_clients == 0 and self.audio_capture.is_active:
-            self.audio_capture.stop()
+        if self._connected_clients == 0:
+            try:
+                if self.audio_capture.is_active:
+                    self.audio_capture.stop()
+            except Exception as e:
+                logger.error("Failed to stop audio capture: %s", e)

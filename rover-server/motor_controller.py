@@ -91,6 +91,9 @@ class RoverController:
         right_byte = self.encode_speed(right)
         packet = [self._command_id, left_byte, right_byte]
 
+        # Debug: print actual bytes being sent over SPI
+        print(f"SPI TX: id={self._command_id} L_byte={left_byte} R_byte={right_byte} (L={left} R={right})")
+
         success = self._transmit(packet)
 
         if not success:
