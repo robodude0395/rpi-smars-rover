@@ -81,10 +81,9 @@ def run_motor_server(spi_bus=0, spi_device=0, spi_speed=500000):
             right_byte = data[2]
             # data[3] is client sequence number (ignored, just for debugging)
 
-            print(f"UDP RX: L={left_byte} R={right_byte} -> SPI [0xAA, {command_id}, {left_byte}, {right_byte}]")
-
-            # Forward to Arduino via SPI
-            spi.xfer2([0xAA, command_id, left_byte, right_byte])
+            # Forward to Arduino via SPI — original 3-byte protocol
+            # [command_id, left_speed, right_speed]
+            spi.xfer2([command_id, left_byte, right_byte])
             command_id = (command_id + 1) % 256
 
             last_command_time = time.time()
