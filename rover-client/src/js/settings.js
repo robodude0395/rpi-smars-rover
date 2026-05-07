@@ -222,7 +222,7 @@ const SettingsPanel = {
             height = parseInt(parts[1], 10);
         }
 
-        const config = {
+        const streamConfig = {
             video: {
                 resolution: [width, height],
                 fps: fps
@@ -236,22 +236,13 @@ const SettingsPanel = {
         this._btnSave.disabled = true;
         this._btnSave.textContent = 'Saving...';
 
-        // POST config, then stop streams, then start streams
-        fetch(`${baseUrl}/api/config`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
-        })
-            .then((response) => {
-                if (!response.ok) {
-                    throw new Error(`Config update failed: HTTP ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(() => {
-                // Stop current streams
-                return fetch(`${baseUrl}/api/stream/stop`, { method: 'POST' });
-            })
+        // Stop video display before restarting streams
+        if (typeof VideoDisplay !== 'undefined') {
+            VideoDisplay.stop();
+        }
+
+        // Stop streams, then start with new config (stream/start accepts config overrides)
+        fetch(`${baseUrl}/api/stream/stop`, { method: 'POST' })
             .then((response) => {
                 if (!response.ok) {
                     throw new Error(`Stream stop failed: HTTP ${response.status}`);
@@ -259,8 +250,16 @@ const SettingsPanel = {
                 return response.json();
             })
             .then(() => {
+                // Small delay to let the server release the camera
+                return new Promise(resolve => setTimeout(resolve, 500));
+            })
+            .then(() => {
                 // Start streams with new config
-                return fetch(`${baseUrl}/api/stream/start`, { method: 'POST' });
+                return fetch(`${baseUrl}/api/stream/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(streamConfig)
+                });
             })
             .then((response) => {
                 if (!response.ok) {
@@ -269,6 +268,11 @@ const SettingsPanel = {
                 return response.json();
             })
             .then(() => {
+                // Restart video display with new stream
+                if (typeof VideoDisplay !== 'undefined') {
+                    VideoDisplay.start(RoverApp.roverIp);
+                }
+
                 // Success — close the panel
                 this._btnSave.textContent = 'Saved!';
                 setTimeout(() => {
@@ -281,6 +285,12 @@ const SettingsPanel = {
                 console.error('Settings: Save failed:', err);
                 this._btnSave.textContent = 'Error — Retry';
                 this._btnSave.disabled = false;
+
+                // Try to restart video even on error
+                if (typeof VideoDisplay !== 'undefined') {
+                    VideoDisplay.start(RoverApp.roverIp);
+                }
+
                 setTimeout(() => {
                     this._btnSave.textContent = 'Save & Apply';
                 }, 2000);

@@ -32,9 +32,30 @@ const AudioInCapture = {
             return; // Already started
         }
 
+        // Check if getUserMedia is available
+        // Try multiple access paths for compatibility across Tauri/browser contexts
+        let getUserMedia = null;
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            getUserMedia = (constraints) => navigator.mediaDevices.getUserMedia(constraints);
+        } else if (navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia) {
+            // Legacy fallback
+            const legacyGetUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+            getUserMedia = (constraints) => new Promise((resolve, reject) => {
+                legacyGetUserMedia.call(navigator, constraints, resolve, reject);
+            });
+        }
+
+        if (!getUserMedia) {
+            showToast('Microphone not available in this context', 'error', 5000);
+            this.enabled = false;
+            const btnMic = document.getElementById('btn-mic');
+            if (btnMic) btnMic.classList.remove('active');
+            return;
+        }
+
         try {
             // Request microphone access
-            this._stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this._stream = await getUserMedia({ audio: true });
 
             // Create AudioContext at native sample rate
             this._audioContext = new (window.AudioContext || window.webkitAudioContext)();

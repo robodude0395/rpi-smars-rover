@@ -6,6 +6,7 @@ yielded as multipart HTTP chunks for Flask streaming responses.
 """
 
 import logging
+import threading
 import time
 from typing import Generator, Optional, Tuple
 
@@ -21,6 +22,9 @@ logger = logging.getLogger(__name__)
 class VideoStream:
     """Captures video from a V4L2 device and generates MJPEG frames.
 
+    Thread-safe: stop() signals the generator to exit before releasing
+    the capture device, preventing segfaults from concurrent access.
+
     Attributes:
         device: V4L2 device index (e.g., 0 for /dev/video0).
         resolution: Target frame size as (width, height).
@@ -29,7 +33,7 @@ class VideoStream:
     """
 
     def __init__(self, device: int = 0, resolution: Tuple[int, int] = (320, 240),
-                 fps: int = 10, jpeg_quality: int = 60):
+                 fps: int = 15, jpeg_quality: int = 50):
         """Initialize video capture parameters.
 
         Args:
@@ -44,6 +48,8 @@ class VideoStream:
         self.jpeg_quality = jpeg_quality
         self._capture: Optional[object] = None
         self._active = False
+        self._lock = threading.Lock()
+        self._generating = False
 
     def start(self):
         """Open the video device.
@@ -56,28 +62,43 @@ class VideoStream:
             self._active = False
             return
 
-        self._capture = cv2.VideoCapture(self.device)
-        if not self._capture.isOpened():
-            logger.error(
-                "Failed to open video device %d. Video streaming disabled.",
-                self.device
-            )
-            self._capture = None
-            self._active = False
-            return
+        with self._lock:
+            self._capture = cv2.VideoCapture(self.device)
+            if not self._capture.isOpened():
+                logger.error(
+                    "Failed to open video device %d. Video streaming disabled.",
+                    self.device
+                )
+                self._capture = None
+                self._active = False
+                return
 
-        self._active = True
-        logger.info(
-            "Video stream started: device=%d, resolution=%s, fps=%d, quality=%d",
-            self.device, self.resolution, self.fps, self.jpeg_quality
-        )
+            self._active = True
+            logger.info(
+                "Video stream started: device=%d, resolution=%s, fps=%d, quality=%d",
+                self.device, self.resolution, self.fps, self.jpeg_quality
+            )
 
     def stop(self):
-        """Release the video device and stop streaming."""
-        if self._capture is not None:
-            self._capture.release()
-            self._capture = None
+        """Release the video device and stop streaming.
+
+        Signals the generator to stop, waits for it to exit, then releases
+        the capture device safely.
+        """
+        # Signal generator to stop
         self._active = False
+
+        # Wait for generator to finish using the capture device
+        deadline = time.time() + 2.0
+        while self._generating and time.time() < deadline:
+            time.sleep(0.05)
+
+        # Now safe to release
+        with self._lock:
+            if self._capture is not None:
+                self._capture.release()
+                self._capture = None
+
         logger.info("Video stream stopped.")
 
     def generate_frames(self) -> Generator[bytes, None, None]:
@@ -95,43 +116,54 @@ class VideoStream:
         if not self._active or self._capture is None:
             return
 
+        self._generating = True
         frame_interval = 1.0 / self.fps
         next_frame_time = time.time()
 
-        while self._active:
-            now = time.time()
+        try:
+            while self._active:
+                now = time.time()
 
-            # If we're behind schedule, skip the sleep and catch up
-            if now < next_frame_time:
-                time.sleep(next_frame_time - now)
+                # If we're behind schedule, skip the sleep and catch up
+                if now < next_frame_time:
+                    time.sleep(next_frame_time - now)
 
-            next_frame_time = time.time() + frame_interval
+                next_frame_time = time.time() + frame_interval
 
-            ret, frame = self._capture.read()
-            if not ret:
-                # Frame capture failed — skip and continue
-                logger.debug("Frame capture failed, skipping frame.")
-                continue
+                # Check again after sleep in case stop() was called
+                if not self._active:
+                    break
 
-            # Resize to configured resolution
-            frame = cv2.resize(frame, self.resolution)
+                with self._lock:
+                    if self._capture is None:
+                        break
+                    ret, frame = self._capture.read()
 
-            # Encode as JPEG with configured quality
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]
-            ret, jpeg = cv2.imencode('.jpg', frame, encode_params)
-            if not ret:
-                logger.debug("JPEG encoding failed, skipping frame.")
-                continue
+                if not ret:
+                    logger.debug("Frame capture failed, skipping frame.")
+                    continue
 
-            jpeg_bytes = jpeg.tobytes()
+                # Resize to configured resolution
+                frame = cv2.resize(frame, self.resolution)
 
-            # Yield as multipart frame
-            yield (
-                b'--frame\r\n'
-                b'Content-Type: image/jpeg\r\n\r\n' +
-                jpeg_bytes +
-                b'\r\n'
-            )
+                # Encode as JPEG with configured quality
+                encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.jpeg_quality]
+                ret, jpeg = cv2.imencode('.jpg', frame, encode_params)
+                if not ret:
+                    logger.debug("JPEG encoding failed, skipping frame.")
+                    continue
+
+                jpeg_bytes = jpeg.tobytes()
+
+                # Yield as multipart frame
+                yield (
+                    b'--frame\r\n'
+                    b'Content-Type: image/jpeg\r\n\r\n' +
+                    jpeg_bytes +
+                    b'\r\n'
+                )
+        finally:
+            self._generating = False
 
     @property
     def is_active(self) -> bool:
