@@ -16,7 +16,7 @@ const MotorControl = {
     // Base speed value (max motor value)
     BASE_SPEED: 127,
 
-    // Command send rate: 20Hz = 50ms interval (matches Arduino's processing capacity)
+    // Command send rate: 20Hz = 50ms (Arduino processes at this rate comfortably)
     SEND_RATE_MS: 50,
 
     /**
