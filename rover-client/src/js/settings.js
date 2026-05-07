@@ -97,6 +97,8 @@ const SettingsPanel = {
 
     /**
      * Populate the resolution selector from device capabilities.
+     * Always includes low-bandwidth options below the camera's native minimum,
+     * since the server downscales frames via cv2.resize() before encoding.
      * @param {object} devices - The device list response from /api/devices
      */
     _populateResolutions(devices) {
@@ -104,6 +106,9 @@ const SettingsPanel = {
 
         const resolutions = new Set();
         const framerates = new Set();
+
+        // Always include low-bandwidth options (server downscales regardless of camera native res)
+        ['80x60', '120x90', '160x120', '240x180'].forEach((res) => resolutions.add(res));
 
         if (devices.video && devices.video.length > 0) {
             devices.video.forEach((device) => {
@@ -116,9 +121,9 @@ const SettingsPanel = {
             });
         }
 
-        if (resolutions.size === 0) {
-            // Provide sensible defaults including low resolutions for Pi Zero
-            ['160x120', '320x240', '640x480', '800x600', '1280x720'].forEach((res) => resolutions.add(res));
+        // If no device resolutions were added beyond our defaults, add standard ones
+        if (resolutions.size <= 4) {
+            ['320x240', '640x480'].forEach((res) => resolutions.add(res));
         }
 
         // Sort resolutions by width (ascending)

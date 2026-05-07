@@ -32,8 +32,8 @@ class VideoStream:
         jpeg_quality: JPEG encoding quality (0-100).
     """
 
-    def __init__(self, device: int = 0, resolution: Tuple[int, int] = (320, 240),
-                 fps: int = 15, jpeg_quality: int = 50):
+    def __init__(self, device: int = 0, resolution: Tuple[int, int] = (160, 120),
+                 fps: int = 15, jpeg_quality: int = 40):
         """Initialize video capture parameters.
 
         Args:

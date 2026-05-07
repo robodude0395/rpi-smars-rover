@@ -14,9 +14,9 @@ class ServerConfig:
 
     # Video settings
     video_device: int = 0
-    video_resolution: Tuple[int, int] = (320, 240)
+    video_resolution: Tuple[int, int] = (160, 120)
     video_fps: int = 15
-    video_jpeg_quality: int = 50
+    video_jpeg_quality: int = 40
 
     # Audio capture settings
     audio_input_device: Optional[int] = None  # None = system default
