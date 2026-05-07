@@ -1,7 +1,8 @@
 {
   "build": {
-    "devPath": "../src",
-    "distDir": "../src"
+    "devPath": "http://localhost:1430",
+    "distDir": "../src",
+    "beforeDevCommand": "npm run serve"
   },
   "package": {
     "productName": "SMARS Rover",
@@ -14,7 +15,10 @@
     "bundle": {
       "active": true,
       "identifier": "com.smars.rover",
-      "icon": []
+      "icon": [],
+      "macOS": {
+        "entitlements": "Entitlements.plist"
+      }
     },
     "security": {
       "csp": null
