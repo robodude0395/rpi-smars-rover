@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "SMARS Telepresence Rover Desktop Client",
   "scripts": {
+    "serve": "npx http-server src -p 1430 -c-1 --silent",
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build"
@@ -11,6 +12,7 @@
     "@tauri-apps/api": "^1.5.3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^1.5.11"
+    "@tauri-apps/cli": "^1.5.11",
+    "http-server": "^14.1.1"
   }
 }

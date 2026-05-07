@@ -63,8 +63,9 @@ const AudioInCapture = {
             // Create source node from mic stream
             this._sourceNode = this._audioContext.createMediaStreamSource(this._stream);
 
-            // Use ScriptProcessorNode for audio processing (practical for Tauri without HTTPS)
-            const bufferSize = 4096;
+            // Use ScriptProcessorNode for audio processing
+            // Smaller buffer = lower latency but more CPU. 2048 is a good balance.
+            const bufferSize = 2048;
             this._scriptNode = this._audioContext.createScriptProcessor(bufferSize, 1, 1);
 
             this._scriptNode.onaudioprocess = (event) => {
