@@ -68,8 +68,7 @@ def run_motor_server(spi_bus=0, spi_device=0, spi_speed=500000):
                 # Check if we need to stop motors (no commands for TIMEOUT_MS)
                 if motors_active and (time.time() - last_command_time) > (TIMEOUT_MS / 1000.0):
                     # Send stop command
-                    spi.xfer2([0xAA, command_id, 128, 128])
-                    command_id = (command_id + 1) % 256
+                    spi.xfer2([0xAA, 128, 128])
                     motors_active = False
                 continue
 
@@ -79,12 +78,9 @@ def run_motor_server(spi_bus=0, spi_device=0, spi_speed=500000):
 
             left_byte = data[1]
             right_byte = data[2]
-            # data[3] is client sequence number (ignored, just for debugging)
 
-            # Forward to Arduino via SPI — original 3-byte protocol
-            # [command_id, left_speed, right_speed]
-            spi.xfer2([command_id, left_byte, right_byte])
-            command_id = (command_id + 1) % 256
+            # Forward to Arduino via SPI — 3 bytes: [SYNC, left, right]
+            spi.xfer2([0xAA, left_byte, right_byte])
 
             last_command_time = time.time()
             motors_active = (left_byte != 128 or right_byte != 128)
@@ -93,7 +89,7 @@ def run_motor_server(spi_bus=0, spi_device=0, spi_speed=500000):
         pass
     finally:
         # Stop motors on shutdown
-        spi.xfer2([0xAA, command_id, 128, 128])
+        spi.xfer2([0xAA, 128, 128])
         spi.close()
         sock.close()
         logger.info("Motor UDP: shutdown complete")
