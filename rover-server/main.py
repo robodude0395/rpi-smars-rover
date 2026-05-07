@@ -1,10 +1,11 @@
 """Main entry point for the SMARS Telepresence Rover server.
 
 Multiprocess architecture for the Raspberry Pi 3B+ (4 cores):
-- Process 1 (main): Flask-SocketIO for motor control + audio (instant response)
-- Process 2: MJPEG video capture and HTTP streaming (CPU-intensive, isolated)
+- Process 1: UDP motor control (port 8082) — raw UDP → SPI, zero latency
+- Process 2: MJPEG video server (port 8081) — OpenCV capture + streaming
+- Process 3 (main): Flask-SocketIO (port 8080) — audio + settings API
 
-Each process runs on its own core, so video encoding never blocks motor commands.
+Each process runs on its own core. Motor commands bypass all web frameworks.
 """
 
 import logging
@@ -17,10 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_video_server(config_dict):
-    """Run the MJPEG video server in a separate process.
-
-    Serves video on port 8081. Completely independent from the control server.
-    """
+    """Run the MJPEG video server in a separate process (port 8081)."""
     import time
     from flask import Flask, Response, jsonify, request
 
@@ -32,7 +30,6 @@ def run_video_server(config_dict):
 
     app = Flask(__name__)
 
-    # Video capture state
     capture = None
     resolution = tuple(config_dict['video_resolution'])
     fps = config_dict['video_fps']
@@ -100,7 +97,6 @@ def run_video_server(config_dict):
 
     @app.route('/video/config', methods=['POST'])
     def update_video_config():
-        """Update video settings and restart camera."""
         nonlocal resolution, fps, jpeg_quality, capture
         data = request.get_json(silent=True) or {}
 
@@ -111,9 +107,9 @@ def run_video_server(config_dict):
         if 'jpeg_quality' in data:
             jpeg_quality = max(10, min(95, int(data['jpeg_quality'])))
 
-        # Restart camera with new settings
         if capture is not None:
             capture.release()
+        time.sleep(0.5)
         open_camera()
 
         return jsonify({'status': 'ok', 'resolution': list(resolution), 'fps': fps})
@@ -123,22 +119,17 @@ def run_video_server(config_dict):
 
 
 def run_control_server(config_dict):
-    """Run the Socket.IO control server (motor + audio) in the main process.
-
-    Serves on port 8080. Handles motor commands, audio streaming, and API.
-    Uses threading async mode for simplicity — no heavy CPU work here.
-    """
-    from flask import Flask, Response, jsonify
+    """Run the Flask-SocketIO server for audio + settings (port 8080)."""
+    from flask import Flask, jsonify
     from flask_socketio import SocketIO
 
-    from api_routes import api_blueprint, init_api_routes
     from audio_capture import AudioCapture
     from audio_in_namespace import AudioInNamespace
     from audio_out_namespace import AudioOutNamespace
     from audio_playback import AudioPlayback
     from config import ServerConfig
     from control_namespace import ControlNamespace
-    from motor_controller import RoverController
+    from device_detector import DeviceDetector
 
     config = ServerConfig()
 
@@ -152,13 +143,7 @@ def run_control_server(config_dict):
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return response
 
-    # Initialize hardware
-    rover_controller = RoverController(
-        bus=config.spi_bus,
-        device=config.spi_device,
-        speed_hz=config.spi_speed_hz,
-    )
-
+    # Audio components
     audio_capture = AudioCapture(
         device_index=config.audio_input_device,
         sample_rate=config.audio_sample_rate,
@@ -172,27 +157,30 @@ def run_control_server(config_dict):
         max_periods=config.audio_max_periods,
     )
 
-    # Register namespaces
-    socketio.on_namespace(ControlNamespace('/control', rover_controller))
+    # Register audio + control namespaces
+    socketio.on_namespace(ControlNamespace('/control'))
     socketio.on_namespace(AudioOutNamespace('/audio_out', audio_capture, socketio))
     socketio.on_namespace(AudioInNamespace('/audio_in', audio_playback))
 
-    # Stub video stream for API compatibility
-    class VideoStub:
-        is_active = True
-        def start(self): pass
-        def stop(self): pass
+    # Simple API routes
+    @app.route('/api/devices', methods=['GET'])
+    def get_devices():
+        try:
+            video_devices = DeviceDetector.list_video_devices()
+            audio_devices = DeviceDetector.list_audio_devices()
+        except Exception as e:
+            logger.warning("Device detection failed: %s", e)
+            video_devices = []
+            audio_devices = []
+        return jsonify({"video": video_devices, "audio": audio_devices})
 
-    video_stub = VideoStub()
-    init_api_routes(video_stub, audio_capture, audio_playback, config, rover_controller)
-    app.register_blueprint(api_blueprint, url_prefix='/api')
-
-    # Proxy video config changes to the video process
-    @app.route('/video_feed')
-    def video_feed():
-        """Redirect to the video server on port 8081."""
-        from flask import redirect
-        return redirect('http://' + config.server_host + ':8081/video_feed', code=302)
+    @app.route('/api/stream/status', methods=['GET'])
+    def stream_status():
+        return jsonify({
+            "video": {"active": True, "port": 8081},
+            "motor": {"active": True, "port": 8082, "protocol": "udp"},
+            "audio_capture": {"active": audio_capture.is_active},
+        })
 
     socketio.run(app, host=config.server_host, port=config.server_port)
 
@@ -208,7 +196,18 @@ if __name__ == '__main__':
         'video_jpeg_quality': config.video_jpeg_quality,
     }
 
-    # Start video server in separate process (runs on its own core)
+    # Process 1: UDP motor control (port 8082)
+    motor_process = multiprocessing.Process(
+        target=lambda: __import__('motor_udp').run_motor_server(
+            config.spi_bus, config.spi_device, config.spi_speed_hz
+        ),
+        name="MotorUDP",
+        daemon=True
+    )
+    motor_process.start()
+    logger.info("Motor UDP server started (port 8082, PID %d)", motor_process.pid)
+
+    # Process 2: Video server (port 8081)
     video_process = multiprocessing.Process(
         target=run_video_server,
         args=(config_dict,),
@@ -216,18 +215,20 @@ if __name__ == '__main__':
         daemon=True
     )
     video_process.start()
-    logger.info("Video server started on port 8081 (PID %d)", video_process.pid)
+    logger.info("Video server started (port 8081, PID %d)", video_process.pid)
 
     # Handle graceful shutdown
     def shutdown(sig, frame):
         logger.info("Shutting down...")
+        motor_process.terminate()
         video_process.terminate()
-        video_process.join(timeout=3)
+        motor_process.join(timeout=2)
+        video_process.join(timeout=2)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    # Run control server in main process
-    logger.info("Control server starting on port 8080...")
+    # Process 3 (main): Audio + settings server (port 8080)
+    logger.info("Control server starting (port 8080)...")
     run_control_server(config_dict)

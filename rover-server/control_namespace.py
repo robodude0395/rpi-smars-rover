@@ -1,84 +1,72 @@
 """Socket.IO /control namespace handler for motor commands.
 
-Handles incoming motor command messages from the desktop client,
-validates them, forwards to the RoverController via SPI, and
-sends acknowledgments back to the client.
+Receives motor commands from the client via Socket.IO and forwards them
+to the UDP motor process via localhost UDP. This keeps the SPI communication
+in its own dedicated process while maintaining browser compatibility.
 """
 
 import logging
+import socket
+import struct
 
 from flask_socketio import Namespace, emit
 
 logger = logging.getLogger(__name__)
 
+# UDP socket for forwarding motor commands to the motor process
+_motor_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+_MOTOR_ADDR = ('127.0.0.1', 8082)
+
 
 class ControlNamespace(Namespace):
     """Socket.IO namespace for motor control at /control.
 
-    Validates incoming motor command messages, dispatches them to the
-    RoverController, and emits acknowledgments or errors back to the client.
-    On client disconnect, sends a stop command to prevent runaway motors.
+    Receives motor commands and forwards them via UDP to the motor process.
+    Also handles latency pings and disconnect safety stops.
     """
 
-    def __init__(self, namespace, rover_controller):
-        """Initialize the control namespace.
-
-        Args:
-            namespace: The Socket.IO namespace path (e.g., '/control').
-            rover_controller: A RoverController instance for SPI motor commands.
-        """
+    def __init__(self, namespace):
         super().__init__(namespace)
-        self.rover_controller = rover_controller
+        self._seq = 0
 
     def on_connect(self):
-        """Handle client connection to /control namespace."""
         logger.info("Client connected to /control namespace")
 
     def on_ping_latency(self, data):
-        """Handle latency ping — echo back immediately for round-trip measurement."""
+        """Echo back for latency measurement."""
         emit('pong_latency', data)
 
     def on_disconnect(self):
-        """Handle client disconnect — send stop command to prevent runaway motors."""
-        logger.info("Client disconnected from /control namespace, sending stop command")
-        self.rover_controller.stop()
+        """Send stop command on disconnect to prevent runaway motors."""
+        logger.info("Client disconnected from /control, sending stop")
+        self._send_udp(128, 128)
 
     def on_command(self, data):
-        """Handle incoming motor command messages.
+        """Handle motor command — forward to UDP motor process.
 
-        Validates the message format and dispatches to the motor controller.
-        Emits an 'ack' event on success or an 'error' event on validation failure.
-
-        Expected message format:
-            {"type": "motor", "left": int, "right": int, "seq": int}
-
-        Args:
-            data: The message payload (should be a dict).
+        Expected: {"type": "motor", "left": int, "right": int, "seq": int}
         """
-        # Fast path: minimal validation for motor commands
         if not isinstance(data, dict):
-            emit('error', {'message': 'Invalid message format'})
             return
 
-        cmd_type = data.get('type')
-        seq = data.get('seq', 0)
-
-        if cmd_type != 'motor':
-            emit('error', {'message': f'Unknown command type: {cmd_type}'})
+        if data.get('type') != 'motor':
             return
 
-        left = data.get('left')
-        right = data.get('right')
+        left = data.get('left', 0)
+        right = data.get('right', 0)
 
-        if left is None or right is None:
-            emit('error', {'message': 'Missing left/right fields'})
-            return
+        # Convert signed (-127..127) to offset byte (1..255)
+        left_byte = max(1, min(255, int(left) + 128))
+        right_byte = max(1, min(255, int(right) + 128))
 
-        left_int = int(left)
-        right_int = int(right)
+        print(f"CMD: L={left} R={right} -> bytes [{left_byte}, {right_byte}]")
+        self._send_udp(left_byte, right_byte)
 
-        # Send to motor controller
-        self.rover_controller.send_command(left_int, right_int)
-
-        # Emit lightweight acknowledgment
-        emit('ack', {'seq': int(seq)})
+    def _send_udp(self, left_byte, right_byte):
+        """Send a 4-byte UDP packet to the motor process."""
+        self._seq = (self._seq + 1) % 256
+        packet = bytes([0xAA, left_byte, right_byte, self._seq])
+        try:
+            _motor_sock.sendto(packet, _MOTOR_ADDR)
+        except OSError:
+            pass
