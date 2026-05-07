@@ -246,27 +246,29 @@ const SettingsPanel = {
             VideoDisplay.stop();
         }
 
-        // Start streams with new config (server handles stop internally)
-        fetch(`${baseUrl}/api/stream/start`, {
+        // Send video config to the video server (port 8081)
+        const videoUrl = `http://${RoverApp.roverIp}:8081`;
+
+        fetch(`${videoUrl}/video/config`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(streamConfig)
+            body: JSON.stringify({
+                resolution: [width, height],
+                fps: fps
+            })
         })
             .then((response) => {
                 if (!response.ok) {
-                    return response.json().then(data => {
-                        throw new Error(data.message || `Stream start failed: HTTP ${response.status}`);
-                    });
+                    throw new Error(`Video config failed: HTTP ${response.status}`);
                 }
                 return response.json();
             })
             .then(() => {
-                // Restart video display with new stream
+                // Restart video display
                 if (typeof VideoDisplay !== 'undefined') {
                     VideoDisplay.start(RoverApp.roverIp);
                 }
 
-                // Success — close the panel
                 this._btnSave.textContent = 'Saved!';
                 setTimeout(() => {
                     this._btnSave.textContent = 'Save & Apply';
@@ -279,7 +281,6 @@ const SettingsPanel = {
                 this._btnSave.textContent = 'Error — Retry';
                 this._btnSave.disabled = false;
 
-                // Try to restart video even on error
                 if (typeof VideoDisplay !== 'undefined') {
                     VideoDisplay.start(RoverApp.roverIp);
                 }

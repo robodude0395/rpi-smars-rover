@@ -16,8 +16,8 @@ const MotorControl = {
     // Base speed value (max motor value)
     BASE_SPEED: 127,
 
-    // Command send rate: 100Hz = 10ms interval for responsive control
-    SEND_RATE_MS: 10,
+    // Command send rate: 20Hz = 50ms interval (matches Arduino's processing capacity)
+    SEND_RATE_MS: 50,
 
     /**
      * Initialize motor control — bind keyboard events and speed slider.

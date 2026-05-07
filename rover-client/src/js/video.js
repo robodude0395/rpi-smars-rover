@@ -24,7 +24,7 @@ const VideoDisplay = {
 
     /**
      * Start displaying the MJPEG stream from the rover.
-     * Sets the img src to the rover's /video_feed endpoint.
+     * Sets the img src to the rover's video server on port 8081.
      * @param {string} roverIp - The rover IP address
      */
     start(roverIp) {
@@ -32,7 +32,7 @@ const VideoDisplay = {
             return;
         }
 
-        const streamUrl = `http://${roverIp}:8080/video_feed`;
+        const streamUrl = `http://${roverIp}:8081/video_feed`;
         this._videoFeed.src = streamUrl;
         this._videoFeed.classList.add('active');
         this._active = true;

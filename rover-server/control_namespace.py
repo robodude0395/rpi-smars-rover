@@ -74,8 +74,15 @@ class ControlNamespace(Namespace):
             emit('error', {'message': 'Missing left/right fields'})
             return
 
+        left_int = int(left)
+        right_int = int(right)
+
+        # Log motor commands for debugging
+        if left_int != 0 or right_int != 0:
+            print(f"Motor: L={left_int} R={right_int}")
+
         # Send to motor controller
-        self.rover_controller.send_command(int(left), int(right))
+        self.rover_controller.send_command(left_int, right_int)
 
         # Emit lightweight acknowledgment
         emit('ack', {'seq': int(seq)})
