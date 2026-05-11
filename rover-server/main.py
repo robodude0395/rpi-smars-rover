@@ -107,6 +107,27 @@ def run_video_server(config_dict):
             mimetype='multipart/x-mixed-replace; boundary=frame'
         )
 
+    @app.route('/snapshot')
+    def snapshot():
+        """Return a single JPEG frame. Used by Tauri production builds where
+        the MJPEG stream is blocked by mixed-content restrictions."""
+        if capture is None or not capture.isOpened():
+            return jsonify({'error': 'Video device unavailable'}), 503
+
+        with cam_lock:
+            ret, frame = capture.read()
+
+        if not ret:
+            return jsonify({'error': 'Failed to capture frame'}), 503
+
+        frame = cv2.resize(frame, resolution)
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
+        ret, jpeg = cv2.imencode('.jpg', frame, encode_params)
+        if not ret:
+            return jsonify({'error': 'Failed to encode frame'}), 503
+
+        return Response(jpeg.tobytes(), mimetype='image/jpeg')
+
     @app.route('/video/config', methods=['POST', 'OPTIONS'])
     def update_video_config():
         if request.method == 'OPTIONS':
