@@ -1,0 +1,14 @@
+[Unit]
+Description=SMARS Rover WiFi Provisioning
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash /opt/wifi_check.sh
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
