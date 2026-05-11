@@ -3,27 +3,43 @@
 # Called by the systemd service on boot.
 
 HOTSPOT_CON="smars-rover-hotspot"
-WAIT_SECONDS=15
-CHECK_INTERVAL=3
+MAX_WAIT=45
+POLL_INTERVAL=5
 
-echo "[wifi_check] Waiting ${WAIT_SECONDS}s for WiFi to connect..."
-sleep "$WAIT_SECONDS"
+echo "[wifi_check] Waiting up to ${MAX_WAIT}s for WiFi to connect..."
 
-# Check if we have an active WiFi connection (that isn't our hotspot)
-ACTIVE_WIFI=$(nmcli -t -f NAME,TYPE,DEVICE connection show --active | grep wifi | grep -v "$HOTSPOT_CON" | head -1)
+# Wait for NetworkManager to be fully up
+sleep 5
+nmcli general status > /dev/null 2>&1
 
-if [ -n "$ACTIVE_WIFI" ]; then
-    echo "[wifi_check] Already connected to WiFi: $ACTIVE_WIFI"
-    echo "[wifi_check] No hotspot needed."
-    exit 0
-fi
+# Poll for an active WiFi connection (not our hotspot)
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+    ACTIVE_WIFI=$(nmcli -t -f NAME,TYPE connection show --active | grep "wifi" | grep -v "$HOTSPOT_CON")
+    if [ -n "$ACTIVE_WIFI" ]; then
+        echo "[wifi_check] Connected to WiFi: $ACTIVE_WIFI"
+        echo "[wifi_check] No hotspot needed. Exiting."
+        exit 0
+    fi
+    sleep $POLL_INTERVAL
+    ELAPSED=$((ELAPSED + POLL_INTERVAL))
+    echo "[wifi_check] Still waiting... (${ELAPSED}s/${MAX_WAIT}s)"
+done
 
-echo "[wifi_check] No WiFi connection found. Starting hotspot..."
+echo "[wifi_check] No WiFi connection after ${MAX_WAIT}s. Starting hotspot..."
+
+# Make sure nothing else is using wlan0 before we take it
+nmcli device disconnect wlan0 2>/dev/null
+sleep 1
+
 nmcli connection up "$HOTSPOT_CON"
 
 if [ $? -eq 0 ]; then
-    echo "[wifi_check] Hotspot active. Starting provisioning portal..."
+    echo "[wifi_check] Hotspot active (SSID: SMARS-Rover). Starting provisioning portal..."
     python3 /opt/wifi_provision.py
+    # Portal exited — means user connected to a network. Stay down.
+    echo "[wifi_check] Provisioning complete. Exiting."
+    exit 0
 else
     echo "[wifi_check] ERROR: Failed to start hotspot."
     exit 1

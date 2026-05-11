@@ -57,10 +57,10 @@ def scan_networks():
 def connect_to_network(ssid, password):
     """Attempt to connect to a WiFi network."""
     try:
-        # First, bring down the hotspot
+        # Bring down the hotspot and release wlan0
         subprocess.run(["nmcli", "connection", "down", HOTSPOT_CON],
                        capture_output=True, timeout=10)
-        time.sleep(2)
+        time.sleep(3)
 
         # Try to connect
         cmd = ["nmcli", "device", "wifi", "connect", ssid]
@@ -70,8 +70,20 @@ def connect_to_network(ssid, password):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
         if result.returncode == 0:
-            print(f"[provision] Connected to '{ssid}' successfully!")
-            return True, "Connected successfully!"
+            # Verify the connection is actually up
+            time.sleep(3)
+            verify = subprocess.run(
+                ["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show", "--active"],
+                capture_output=True, text=True, timeout=10
+            )
+            if ssid in verify.stdout:
+                print(f"[provision] Connected to '{ssid}' successfully!")
+                return True, "Connected successfully!"
+            else:
+                print(f"[provision] Connection to '{ssid}' did not persist.")
+                subprocess.run(["nmcli", "connection", "up", HOTSPOT_CON],
+                               capture_output=True, timeout=10)
+                return False, "Connection dropped immediately after connecting"
         else:
             error_msg = result.stderr.strip() or result.stdout.strip() or "Connection failed"
             print(f"[provision] Failed to connect to '{ssid}': {error_msg}")
