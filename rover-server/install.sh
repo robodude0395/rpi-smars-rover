@@ -48,8 +48,8 @@ if ! systemctl is-active --quiet NetworkManager; then
     echo "Skipping WiFi provisioning setup."
 else
     # Create hotspot connection profile
-    nmcli connection delete smars-rover-hotspot 2>/dev/null || true
-    nmcli connection add \
+    sudo nmcli connection delete smars-rover-hotspot 2>/dev/null || true
+    sudo nmcli connection add \
         type wifi \
         ifname wlan0 \
         con-name smars-rover-hotspot \
