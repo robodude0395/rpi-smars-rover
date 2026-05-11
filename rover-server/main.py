@@ -37,9 +37,6 @@ def run_video_server(config_dict):
     jpeg_quality = config_dict['video_jpeg_quality']
     device = config_dict['video_device']
     cam_lock = threading.Lock()
-    actual_fps = 0
-    _frame_count = 0
-    _fps_last_time = time.time()
 
     def open_camera():
         nonlocal capture
@@ -55,7 +52,6 @@ def run_video_server(config_dict):
             capture = None
 
     def generate_frames():
-        nonlocal actual_fps, _frame_count, _fps_last_time
         while True:
             # Read current settings each iteration
             frame_interval = 1.0 / fps
@@ -78,15 +74,6 @@ def run_video_server(config_dict):
             if not ret:
                 continue
 
-            # Count frames for FPS reporting
-            _frame_count += 1
-            now = time.time()
-            elapsed = now - _fps_last_time
-            if elapsed >= 1.0:
-                actual_fps = round(_frame_count / elapsed)
-                _frame_count = 0
-                _fps_last_time = now
-
             yield (
                 b'--frame\r\n'
                 b'Content-Type: image/jpeg\r\n\r\n' +
@@ -105,10 +92,6 @@ def run_video_server(config_dict):
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return response
-
-    @app.route('/video/fps')
-    def video_fps():
-        return jsonify({'fps': actual_fps})
 
     @app.route('/video_feed')
     def video_feed():
