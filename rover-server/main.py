@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 def run_video_server(config_dict):
     """Run the MJPEG video server in a separate process (port 8081)."""
+    import threading
     import time
     from flask import Flask, Response, jsonify, request
 
@@ -35,6 +36,10 @@ def run_video_server(config_dict):
     fps = config_dict['video_fps']
     jpeg_quality = config_dict['video_jpeg_quality']
     device = config_dict['video_device']
+    cam_lock = threading.Lock()
+    actual_fps = 0
+    _frame_count = 0
+    _fps_last_time = time.time()
 
     def open_camera():
         nonlocal capture
@@ -50,16 +55,20 @@ def run_video_server(config_dict):
             capture = None
 
     def generate_frames():
-        frame_interval = 1.0 / fps
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
-
+        nonlocal actual_fps, _frame_count, _fps_last_time
         while True:
-            if capture is None or not capture.isOpened():
-                time.sleep(0.1)
-                continue
+            # Read current settings each iteration
+            frame_interval = 1.0 / fps
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
 
-            start = time.time()
-            ret, frame = capture.read()
+            with cam_lock:
+                if capture is None or not capture.isOpened():
+                    time.sleep(0.1)
+                    continue
+
+                start = time.time()
+                ret, frame = capture.read()
+
             if not ret:
                 time.sleep(0.01)
                 continue
@@ -68,6 +77,15 @@ def run_video_server(config_dict):
             ret, jpeg = cv2.imencode('.jpg', frame, encode_params)
             if not ret:
                 continue
+
+            # Count frames for FPS reporting
+            _frame_count += 1
+            now = time.time()
+            elapsed = now - _fps_last_time
+            if elapsed >= 1.0:
+                actual_fps = round(_frame_count / elapsed)
+                _frame_count = 0
+                _fps_last_time = now
 
             yield (
                 b'--frame\r\n'
@@ -87,6 +105,10 @@ def run_video_server(config_dict):
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return response
+
+    @app.route('/video/fps')
+    def video_fps():
+        return jsonify({'fps': actual_fps})
 
     @app.route('/video_feed')
     def video_feed():
@@ -111,10 +133,12 @@ def run_video_server(config_dict):
         if 'jpeg_quality' in data:
             jpeg_quality = max(10, min(95, int(data['jpeg_quality'])))
 
-        if capture is not None:
-            capture.release()
-        time.sleep(0.5)
-        open_camera()
+        with cam_lock:
+            if capture is not None:
+                capture.release()
+                capture = None
+            time.sleep(0.3)
+            open_camera()
 
         return jsonify({'status': 'ok', 'resolution': list(resolution), 'fps': fps})
 
