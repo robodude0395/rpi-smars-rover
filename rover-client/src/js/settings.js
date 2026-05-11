@@ -213,10 +213,8 @@ const SettingsPanel = {
             return;
         }
 
-        const baseUrl = `http://${RoverApp.roverIp}:8080`;
         const resolution = this._resolutionSelect.value;
         const fps = parseInt(this._fpsSelect.value, 10);
-        const audioDevice = this._audioDeviceSelect.value || null;
 
         // Parse resolution into width and height
         let width = 320;
@@ -226,16 +224,6 @@ const SettingsPanel = {
             width = parseInt(parts[0], 10);
             height = parseInt(parts[1], 10);
         }
-
-        const streamConfig = {
-            video: {
-                resolution: [width, height],
-                fps: fps
-            },
-            audio: {
-                input_device: audioDevice
-            }
-        };
 
         // Disable save button during operation
         this._btnSave.disabled = true;
