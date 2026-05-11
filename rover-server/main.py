@@ -21,12 +21,17 @@ def run_video_server(config_dict):
     """Run the MJPEG video server in a separate process (port 8081)."""
     import threading
     import time
+
+    # Re-initialize logging in child process
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(message)s')
+    vid_logger = logging.getLogger('video')
+
     from flask import Flask, Response, jsonify, request
 
     try:
         import cv2
     except ImportError:
-        logger.error("OpenCV not available in video process")
+        vid_logger.error("OpenCV not available in video process")
         return
 
     app = Flask(__name__)
@@ -46,9 +51,9 @@ def run_video_server(config_dict):
             capture.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
             capture.set(cv2.CAP_PROP_FPS, fps)
             capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-            logger.info("Video: camera opened at %s %dfps", resolution, fps)
+            vid_logger.info("Video: camera opened at %s %dfps", resolution, fps)
         else:
-            logger.error("Video: failed to open camera device %d", device)
+            vid_logger.error("Video: failed to open camera device %d", device)
             capture = None
 
     def generate_frames():
@@ -125,8 +130,12 @@ def run_video_server(config_dict):
 
         return jsonify({'status': 'ok', 'resolution': list(resolution), 'fps': fps})
 
-    open_camera()
-    app.run(host='0.0.0.0', port=8081, threaded=True)
+    try:
+        open_camera()
+        vid_logger.info("Video server starting on port 8081...")
+        app.run(host='0.0.0.0', port=8081, threaded=True)
+    except Exception as e:
+        vid_logger.error("Video server crashed: %s", e, exc_info=True)
 
 
 def run_control_server(config_dict):
