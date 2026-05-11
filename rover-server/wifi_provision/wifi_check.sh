@@ -15,12 +15,20 @@ nmcli general status > /dev/null 2>&1
 # Poll for an active WiFi connection (not our hotspot)
 ELAPSED=0
 while [ $ELAPSED -lt $MAX_WAIT ]; do
-    ACTIVE_WIFI=$(nmcli -t -f NAME,TYPE connection show --active | grep "wifi" | grep -v "$HOTSPOT_CON")
-    if [ -n "$ACTIVE_WIFI" ]; then
-        echo "[wifi_check] Connected to WiFi: $ACTIVE_WIFI"
+    # Check if wlan0 is connected (state will show "connected" not "disconnected")
+    WLAN_STATE=$(nmcli -t -f DEVICE,STATE device status | grep "^wlan0:" | cut -d: -f2)
+
+    # Also check the active connection name on wlan0
+    ACTIVE_CON=$(nmcli -t -f DEVICE,CONNECTION device status | grep "^wlan0:" | cut -d: -f2)
+
+    echo "[wifi_check] wlan0 state: '$WLAN_STATE', connection: '$ACTIVE_CON'"
+
+    if [ "$WLAN_STATE" = "connected" ] && [ -n "$ACTIVE_CON" ] && [ "$ACTIVE_CON" != "$HOTSPOT_CON" ] && [ "$ACTIVE_CON" != "--" ]; then
+        echo "[wifi_check] Connected to WiFi: $ACTIVE_CON"
         echo "[wifi_check] No hotspot needed. Exiting."
         exit 0
     fi
+
     sleep $POLL_INTERVAL
     ELAPSED=$((ELAPSED + POLL_INTERVAL))
     echo "[wifi_check] Still waiting... (${ELAPSED}s/${MAX_WAIT}s)"
