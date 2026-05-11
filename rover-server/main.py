@@ -84,6 +84,8 @@ def run_video_server(config_dict):
     @app.after_request
     def cors(response):
         response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
         return response
 
     @app.route('/video_feed')
@@ -95,8 +97,10 @@ def run_video_server(config_dict):
             mimetype='multipart/x-mixed-replace; boundary=frame'
         )
 
-    @app.route('/video/config', methods=['POST'])
+    @app.route('/video/config', methods=['POST', 'OPTIONS'])
     def update_video_config():
+        if request.method == 'OPTIONS':
+            return '', 204
         nonlocal resolution, fps, jpeg_quality, capture
         data = request.get_json(silent=True) or {}
 
