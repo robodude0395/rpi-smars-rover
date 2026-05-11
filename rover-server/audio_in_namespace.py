@@ -63,3 +63,13 @@ class AudioInNamespace(Namespace):
         """
         if isinstance(data, (bytes, bytearray)):
             self.audio_playback.write(data)
+
+    def on_set_volume(self, data):
+        """Handle volume change from the client.
+
+        Args:
+            data: Dict with 'level' key (0-100).
+        """
+        if isinstance(data, dict) and 'level' in data:
+            level = int(data['level'])
+            self.audio_playback.set_volume(level)

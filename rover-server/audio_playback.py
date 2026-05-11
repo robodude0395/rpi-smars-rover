@@ -42,7 +42,7 @@ class AudioPlayback:
 
     SAMPLE_WIDTH = 2  # 16-bit = 2 bytes per sample
     CHANNELS = 1
-    GAIN = 4.0  # Software gain multiplier applied to PCM samples
+    MAX_GAIN = 6.0  # Maximum software gain
 
     def __init__(self, device: str = 'default', sample_rate: int = 16000,
                  period_size: int = 512, max_periods: int = 8):
@@ -60,6 +60,7 @@ class AudioPlayback:
         self._max_periods = max_periods
         self._max_buffer_bytes = max_periods * period_size * self.SAMPLE_WIDTH
         self._period_bytes = period_size * self.SAMPLE_WIDTH
+        self._gain = 4.0  # Default gain (adjustable via set_volume)
 
         self._buffer = bytearray()
         self._lock = threading.Lock()
@@ -127,10 +128,6 @@ class AudioPlayback:
     def write(self, data: bytes):
         """Write PCM data to circular buffer. Discards oldest on overflow.
 
-        Called from the WebSocket receiver thread. If adding the data would
-        exceed the buffer capacity (2 periods), the oldest data is discarded
-        to make room, retaining only the most recent 2 periods worth of data.
-
         Args:
             data: Raw PCM audio bytes (16-bit signed LE, mono, 16kHz).
         """
@@ -145,6 +142,18 @@ class AudioPlayback:
                 overflow = len(self._buffer) - self._max_buffer_bytes
                 del self._buffer[:overflow]
 
+    def set_volume(self, level: int):
+        """Set playback volume as a percentage (0-100).
+
+        Maps 0-100 to gain range 0.0 to MAX_GAIN.
+
+        Args:
+            level: Volume level 0-100.
+        """
+        level = max(0, min(100, level))
+        self._gain = (level / 100.0) * self.MAX_GAIN
+        logger.info("Audio playback gain set to %.2f (volume %d%%)", self._gain, level)
+
     @property
     def buffer_level(self) -> int:
         """Current bytes in buffer."""
@@ -157,8 +166,6 @@ class AudioPlayback:
         Reads one period at a time from the buffer, applies software gain,
         and writes to ALSA. When the buffer is empty, sleeps briefly.
         """
-        import struct
-
         while self._running:
             chunk = self._read_period()
 
@@ -167,8 +174,8 @@ class AudioPlayback:
                 continue
 
             # Apply software gain to PCM samples
-            if self.GAIN != 1.0:
-                chunk = self._apply_gain(chunk)
+            if self._gain != 1.0:
+                chunk = self._apply_gain(chunk, self._gain)
 
             try:
                 self._pcm.write(chunk)
@@ -176,11 +183,12 @@ class AudioPlayback:
                 logger.warning("Audio playback error: %s", e)
 
     @staticmethod
-    def _apply_gain(chunk: bytes) -> bytes:
-        """Amplify 16-bit PCM samples by the GAIN factor, with clipping.
+    def _apply_gain(chunk: bytes, gain: float) -> bytes:
+        """Amplify 16-bit PCM samples by the given gain factor, with clipping.
 
         Args:
             chunk: Raw PCM bytes (16-bit signed LE).
+            gain: Multiplier to apply.
 
         Returns:
             Amplified PCM bytes, clipped to int16 range.
@@ -190,10 +198,8 @@ class AudioPlayback:
         samples = array.array('h')  # signed 16-bit
         samples.frombytes(chunk)
 
-        gain = AudioPlayback.GAIN
         for i in range(len(samples)):
             amplified = int(samples[i] * gain)
-            # Clip to int16 range
             if amplified > 32767:
                 amplified = 32767
             elif amplified < -32768:

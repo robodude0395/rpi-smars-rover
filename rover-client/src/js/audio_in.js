@@ -21,6 +21,25 @@ const AudioInCapture = {
                 this.toggle();
             });
         }
+
+        // Volume slider controls rover speaker volume
+        const volumeSlider = document.getElementById('volume-slider');
+        if (volumeSlider) {
+            volumeSlider.addEventListener('input', () => {
+                this._sendVolume(parseInt(volumeSlider.value, 10));
+            });
+        }
+    },
+
+    /**
+     * Send volume level to the rover (0-100 mapped to gain).
+     * @param {number} level - Volume level 0-100
+     */
+    _sendVolume(level) {
+        const socket = RoverApp.sockets.audioIn;
+        if (socket && socket.connected) {
+            socket.emit('set_volume', { level: level });
+        }
     },
 
     /**
