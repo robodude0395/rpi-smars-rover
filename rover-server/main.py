@@ -233,7 +233,7 @@ def run_control_server(config_dict):
             "audio_capture": {"active": audio_capture.is_active},
         })
 
-    socketio.run(app, host=config.server_host, port=config.server_port)
+    socketio.run(app, host=config.server_host, port=config.server_port, allow_unsafe_werkzeug=True)
 
 
 if __name__ == '__main__':
