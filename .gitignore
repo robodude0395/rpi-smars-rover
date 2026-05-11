@@ -33,6 +33,9 @@ package-lock.json
 rover-client/src-tauri/target/
 rover-client/src-tauri/Cargo.lock
 
+# PlatformIO
+rover-firmware/.pio/
+
 # IDE
 .vscode/
 .idea/

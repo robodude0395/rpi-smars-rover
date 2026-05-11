@@ -42,6 +42,7 @@ class AudioPlayback:
 
     SAMPLE_WIDTH = 2  # 16-bit = 2 bytes per sample
     CHANNELS = 1
+    GAIN = 4.0  # Software gain multiplier applied to PCM samples
 
     def __init__(self, device: str = 'default', sample_rate: int = 16000,
                  period_size: int = 512, max_periods: int = 8):
@@ -153,22 +154,53 @@ class AudioPlayback:
     def _player_loop(self):
         """Background thread that reads from buffer and writes to ALSA.
 
-        Reads one period at a time from the buffer. When the buffer is
-        empty, sleeps briefly to avoid busy-waiting.
+        Reads one period at a time from the buffer, applies software gain,
+        and writes to ALSA. When the buffer is empty, sleeps briefly.
         """
+        import struct
+
         while self._running:
             chunk = self._read_period()
 
             if chunk is None:
-                # Buffer empty — sleep briefly to avoid busy-waiting
-                gevent_sleep(0.004)  # ~4ms, half a period at 16kHz/512
+                gevent_sleep(0.004)
                 continue
+
+            # Apply software gain to PCM samples
+            if self.GAIN != 1.0:
+                chunk = self._apply_gain(chunk)
 
             try:
                 self._pcm.write(chunk)
             except Exception as e:
                 logger.warning("Audio playback error: %s", e)
-                # Continue receiving — don't crash on playback errors
+
+    @staticmethod
+    def _apply_gain(chunk: bytes) -> bytes:
+        """Amplify 16-bit PCM samples by the GAIN factor, with clipping.
+
+        Args:
+            chunk: Raw PCM bytes (16-bit signed LE).
+
+        Returns:
+            Amplified PCM bytes, clipped to int16 range.
+        """
+        import array
+
+        samples = array.array('h')  # signed 16-bit
+        samples.frombytes(chunk)
+
+        gain = AudioPlayback.GAIN
+        for i in range(len(samples)):
+            amplified = int(samples[i] * gain)
+            # Clip to int16 range
+            if amplified > 32767:
+                amplified = 32767
+            elif amplified < -32768:
+                amplified = -32768
+            samples[i] = amplified
+
+        return samples.tobytes()
 
     def _read_period(self) -> Optional[bytes]:
         """Read one period of audio from the buffer.

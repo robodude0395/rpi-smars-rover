@@ -1,6 +1,6 @@
 #!/bin/bash
 # SMARS Telepresence Rover - Server Installation Script
-# Run this on the Raspberry Pi Zero W to install all dependencies.
+# Run this on the Raspberry Pi to install all dependencies.
 
 set -e
 

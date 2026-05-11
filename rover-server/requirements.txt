@@ -7,5 +7,4 @@ pyalsaaudio==0.11.0
 spidev==3.6
 pyaudio==0.2.14
 # opencv-python is installed via system package (sudo apt-get install python3-opencv)
-# Building from source on Pi Zero requires too much disk space and time.
 # Use: python3 -m venv .venv --system-site-packages

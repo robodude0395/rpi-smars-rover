@@ -9,10 +9,10 @@ class ServerConfig:
     """Configuration dataclass for the unified rover server.
 
     Contains all hardware and network settings with defaults optimized
-    for Raspberry Pi 5 (4-core ARM Cortex-A76).
+    for Raspberry Pi 3B+ (4-core ARM Cortex-A53).
     """
 
-    # Video settings — Pi 5 can handle higher res and FPS comfortably
+    # Video settings
     video_device: int = 0
     video_resolution: Tuple[int, int] = (320, 240)
     video_fps: int = 30

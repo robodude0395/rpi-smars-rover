@@ -1,10 +1,10 @@
 # SMARS Rover Server
 
-Unified Python server for the SMARS Telepresence Rover. Runs on a Raspberry Pi Zero W and provides motor control (SPI), MJPEG video streaming, and bidirectional audio over WebSockets.
+Unified Python server for the SMARS Telepresence Rover. Runs on a Raspberry Pi 3B+ and provides motor control (SPI), MJPEG video streaming, and bidirectional audio over WebSockets.
 
 ## Prerequisites
 
-- Raspberry Pi Zero W (or compatible Pi with WiFi)
+- Raspberry Pi 3B+ (or any multicore Pi with WiFi)
 - Python 3.9+
 - SPI enabled via `raspi-config`
 - USB webcam (V4L2 compatible)
