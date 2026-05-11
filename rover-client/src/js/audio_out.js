@@ -9,7 +9,8 @@ const AudioOutPlayer = {
     _nextPlayTime: 0,
     _boundOnAudioData: null,
     _sampleRate: 16000,
-    _bufferAheadTime: 0.05, // 50ms buffer ahead for gapless playback
+    _bufferAheadTime: 0.02, // 20ms buffer ahead — keep tight for low latency
+    _maxScheduleAhead: 0.15, // Drop audio if we're >150ms ahead (prevents buildup)
 
     /**
      * Initialize the audio out player — bind UI events.
@@ -130,6 +131,13 @@ const AudioOutPlayer = {
         // If _nextPlayTime has fallen behind currentTime, reset with a small buffer
         if (this._nextPlayTime < currentTime) {
             this._nextPlayTime = currentTime + this._bufferAheadTime;
+        }
+
+        // If we've drifted too far ahead (network jitter buildup), drop this chunk
+        // to prevent ever-growing latency
+        if (this._nextPlayTime - currentTime > this._maxScheduleAhead) {
+            this._nextPlayTime = currentTime + this._bufferAheadTime;
+            return; // Drop this chunk to resync
         }
 
         // Create a buffer source node and schedule it

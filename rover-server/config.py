@@ -22,7 +22,7 @@ class ServerConfig:
     audio_input_device: Optional[int] = None  # None = system default
     audio_sample_rate: int = 16000
     audio_channels: int = 1
-    audio_chunk_samples: int = 512  # 512 samples = 1024 bytes at 16-bit
+    audio_chunk_samples: int = 1024  # 1024 samples = 2048 bytes at 16-bit = 64ms per chunk
 
     # Audio playback settings
     audio_playback_device: str = 'default'

@@ -1,7 +1,8 @@
 """Socket.IO /audio_out namespace handler for rover microphone streaming.
 
 Streams captured audio from the rover's microphone to connected clients
-as binary PCM frames (16kHz, mono, 16-bit signed LE, 512-byte chunks).
+as binary PCM frames (16kHz, mono, 16-bit signed LE). Chunks are batched
+to reduce per-packet overhead over high-latency links (e.g. Tailscale).
 """
 
 import logging
@@ -10,6 +11,11 @@ from flask_socketio import Namespace
 
 logger = logging.getLogger(__name__)
 
+# Number of capture chunks to batch before emitting.
+# At 512 samples/chunk (32ms each), 4 chunks = ~128ms of audio per packet.
+# This dramatically reduces Socket.IO framing overhead on WAN links.
+BATCH_CHUNKS = 4
+
 
 class AudioOutNamespace(Namespace):
     """Socket.IO namespace for audio output (rover mic → client) at /audio_out.
@@ -17,7 +23,7 @@ class AudioOutNamespace(Namespace):
     Manages AudioCapture lifecycle based on client connections:
     - Starts capture when the first client connects
     - Stops capture when the last client disconnects
-    - Emits binary PCM frames to all connected clients via the on_audio callback
+    - Batches PCM chunks and emits to all connected clients
     """
 
     def __init__(self, namespace, audio_capture, socketio):
@@ -32,20 +38,31 @@ class AudioOutNamespace(Namespace):
         self.audio_capture = audio_capture
         self._socketio = socketio
         self._connected_clients = 0
+        self._batch_buffer = bytearray()
+        self._batch_target = BATCH_CHUNKS
 
     def _on_audio_data(self, data):
         """Callback invoked by AudioCapture with PCM audio chunks.
 
-        Emits binary audio data to all connected clients on this namespace.
+        Accumulates chunks and emits a batched packet once the target count
+        is reached. This reduces the number of Socket.IO messages sent over
+        the network while keeping latency bounded.
 
         Args:
-            data: Raw PCM audio bytes (512 bytes).
+            data: Raw PCM audio bytes (512 bytes per chunk from AudioCapture).
         """
-        if self._connected_clients > 0:
+        if self._connected_clients <= 0:
+            return
+
+        self._batch_buffer.extend(data)
+
+        if len(self._batch_buffer) >= len(data) * self._batch_target:
             try:
-                self._socketio.emit('audio_data', data, namespace=self.namespace)
+                self._socketio.emit('audio_data', bytes(self._batch_buffer),
+                                    namespace=self.namespace)
             except Exception as e:
                 logger.warning("Failed to emit audio data: %s", e)
+            self._batch_buffer.clear()
 
     def on_connect(self):
         """Handle client connection to /audio_out namespace.
