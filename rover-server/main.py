@@ -104,7 +104,13 @@ def run_video_server(config_dict):
             return jsonify({'error': 'Video device unavailable'}), 503
         return Response(
             generate_frames(),
-            mimetype='multipart/x-mixed-replace; boundary=frame'
+            mimetype='multipart/x-mixed-replace; boundary=frame',
+            headers={
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+            }
         )
 
     @app.route('/snapshot')
@@ -126,7 +132,9 @@ def run_video_server(config_dict):
         if not ret:
             return jsonify({'error': 'Failed to encode frame'}), 503
 
-        return Response(jpeg.tobytes(), mimetype='image/jpeg')
+        return Response(jpeg.tobytes(), mimetype='image/jpeg',
+                        headers={'Access-Control-Allow-Origin': '*',
+                                 'Cache-Control': 'no-cache'})
 
     @app.route('/video/config', methods=['POST', 'OPTIONS'])
     def update_video_config():
@@ -171,6 +179,7 @@ def run_control_server(config_dict):
     from config import ServerConfig
     from control_namespace import ControlNamespace
     from device_detector import DeviceDetector
+    from video_namespace import VideoNamespace
 
     config = ServerConfig()
 
@@ -198,10 +207,11 @@ def run_control_server(config_dict):
         max_periods=config.audio_max_periods,
     )
 
-    # Register audio + control namespaces
+    # Register audio + control + video namespaces
     socketio.on_namespace(ControlNamespace('/control'))
     socketio.on_namespace(AudioOutNamespace('/audio_out', audio_capture, socketio))
     socketio.on_namespace(AudioInNamespace('/audio_in', audio_playback))
+    socketio.on_namespace(VideoNamespace('/video', socketio, config_dict))
 
     # Simple API routes
     @app.route('/api/devices', methods=['GET'])
@@ -248,23 +258,21 @@ if __name__ == '__main__':
     motor_process.start()
     logger.info("Motor UDP server started (port 8082, PID %d)", motor_process.pid)
 
-    # Process 2: Video server (port 8081)
-    video_process = multiprocessing.Process(
-        target=run_video_server,
-        args=(config_dict,),
-        name="VideoServer",
-        daemon=True
-    )
-    video_process.start()
-    logger.info("Video server started (port 8081, PID %d)", video_process.pid)
+    # Process 2: Video server (port 8081) — disabled, video now streams via Socket.IO
+    # video_process = multiprocessing.Process(
+    #     target=run_video_server,
+    #     args=(config_dict,),
+    #     name="VideoServer",
+    #     daemon=True
+    # )
+    # video_process.start()
+    # logger.info("Video server started (port 8081, PID %d)", video_process.pid)
 
     # Handle graceful shutdown
     def shutdown(sig, frame):
         logger.info("Shutting down...")
         motor_process.terminate()
-        video_process.terminate()
         motor_process.join(timeout=2)
-        video_process.join(timeout=2)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
