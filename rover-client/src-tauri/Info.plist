@@ -6,5 +6,14 @@
     <string>SMARS Rover needs microphone access to send audio to the rover speaker.</string>
     <key>NSCameraUsageDescription</key>
     <string>SMARS Rover needs camera access for video features.</string>
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>SMARS Rover connects to the rover over the local network for video, audio, and control.</string>
 </dict>
 </plist>
