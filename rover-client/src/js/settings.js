@@ -169,10 +169,6 @@ const SettingsPanel = {
             const option = document.createElement('option');
             option.value = fps;
             option.textContent = fps + ' fps';
-            // Mark high FPS values with a warning for Pi Zero
-            if (fps > 20) {
-                option.textContent += ' (may be unstable)';
-            }
             this._fpsSelect.appendChild(option);
         });
 
